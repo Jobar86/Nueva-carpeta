@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../config/app_theme.dart';
 import '../../services/auth_service.dart';
+import '../../utils/seed_data.dart';
 
 /// Pantalla de Perfil de Usuario
 class ProfileScreen extends StatelessWidget {
@@ -201,6 +202,19 @@ class ProfileScreen extends StatelessWidget {
                           icon: Icons.help_outline,
                           title: 'Ayuda',
                           onTap: () {},
+                        ),
+                        const Divider(height: 1),
+                        _buildListTile(
+                          icon: Icons.cloud_upload_outlined,
+                          title: 'Simular Datos (Demo)',
+                          onTap: () async {
+                            await SeedData.populateFirestore();
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(content: Text('Datos sembrados con éxito')),
+                              );
+                            }
+                          },
                         ),
                       ],
                     ),

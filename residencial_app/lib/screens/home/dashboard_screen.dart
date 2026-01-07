@@ -2,7 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../config/app_theme.dart';
 import '../../services/auth_service.dart';
+import '../../services/communication_service.dart';
 import '../../widgets/widgets.dart';
+import '../../widgets/panic_button_widget.dart';
+import '../security/invitation_create_screen.dart';
+import '../security/patrol_map_screen.dart';
+import '../communication/chat_list_screen.dart';
+import '../communication/feed_screen.dart';
 
 /// Pantalla principal del Dashboard
 class DashboardScreen extends StatelessWidget {
@@ -241,17 +247,105 @@ class DashboardScreen extends StatelessWidget {
   }
 
   void _navigateTo(BuildContext context, String route) {
-    // TODO: Implementar navegación real
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Navegando a: $route'),
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(10),
+    Widget? screen;
+    
+    switch (route) {
+      case '/panic-button':
+        _showPanicDialog(context);
+        return;
+      case '/access-control':
+        screen = const InvitationCreateScreen();
+        break;
+      case '/gate-opener':
+        // Simular apertura de puerta
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('🚪 Puerta abierta por 30 segundos'),
+            backgroundColor: Colors.green,
+          ),
+        );
+        return;
+      case '/guard-patrol':
+        screen = const PatrolMapScreen();
+        break;
+      case '/chat':
+        screen = const ChatListScreen();
+        break;
+      case '/announcements':
+        screen = const FeedScreen();
+        break;
+      case '/trash-alert':
+        _triggerTrashAlert(context);
+        return;
+      default:
+        // Ruta no implementada
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Función "$route" próximamente'),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+        return;
+    }
+    
+    if (screen != null) {
+      Navigator.push(context, MaterialPageRoute(builder: (_) => screen!));
+    }
+  }
+
+  void _showPanicDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('⚠️ Botón de Pánico'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text('Mantén presionado el botón para activar la alerta de emergencia.'),
+            const SizedBox(height: 20),
+            PanicButtonWidget(size: 200),
+          ],
         ),
       ),
     );
   }
+
+  void _triggerTrashAlert(BuildContext context) async {
+    final authService = Provider.of<AuthService>(context, listen: false);
+    
+    if (!authService.isGuard && !authService.isAdmin) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Solo guardias pueden enviar esta alerta'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+    
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('🚛 ¿Confirmar Alerta de Basura?'),
+        content: const Text('Esto notificará a todos los residentes.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancelar')),
+          ElevatedButton(onPressed: () => Navigator.pop(context, true), child: const Text('Enviar')),
+        ],
+      ),
+    );
+
+    if (confirm == true && context.mounted) {
+      final commService = Provider.of<CommunicationService>(context, listen: false);
+      await commService.triggerTrashAlert(authService.userId!);
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('✅ Alerta enviada a residentes'), backgroundColor: Colors.green),
+        );
+      }
+    }
+  }
+
 
   void _showNotifications(BuildContext context) {
     showModalBottomSheet(

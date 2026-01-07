@@ -1,6 +1,15 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../../config/app_theme.dart';
+import '../../services/auth_service.dart';
+import '../../services/security_service.dart';
 import '../../widgets/widgets.dart';
+import '../../services/panic_service.dart';
+import '../../services/communication_service.dart';
+import 'invitation_create_screen.dart';
+import 'qr_scanner_screen.dart';
+import 'patrol_map_screen.dart';
+import '../../widgets/panic_button_widget.dart';
 
 /// Hub de Seguridad - Lista de funciones de seguridad
 class SecurityHubScreen extends StatelessWidget {
@@ -8,6 +17,8 @@ class SecurityHubScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final authService = Provider.of<AuthService>(context);
+
     return Scaffold(
       backgroundColor: AppTheme.backgroundColor,
       appBar: const CustomAppBar(title: 'Seguridad'),
@@ -23,36 +34,74 @@ class SecurityHubScreen extends StatelessWidget {
               title: 'Botón de Pánico',
               subtitle: 'Alertar emergencia a todos',
               gradient: AppTheme.dangerGradient,
-              onTap: () => _navigateTo(context, 'Botón de Pánico'),
+              onTap: () => _showPanicDialog(context),
             ),
             
             const SizedBox(height: 24),
             
             // Lista de funciones
+            // 2. Registro de Visitas (Todos)
             _buildSecurityOption(
               context,
-              icon: Icons.qr_code_2_rounded,
               title: 'Registro de Visitas',
-              subtitle: 'Genera códigos QR para tus invitados',
-              color: AppTheme.primaryColor,
+              subtitle: 'Generar códigos QR para visitantes',
+              icon: Icons.qr_code_2,
+              color: Colors.indigo,
+              onTap: () {
+                 Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => const InvitationCreateScreen()),
+                );
+              },
             ),
             
+            const SizedBox(height: 16),
+            
+            // 3. Control de Acceso (Solo Guardia/Admin)
+            if (authService.isGuard || authService.isAdmin)
+              _buildSecurityOption(
+                context,
+                title: 'Escanear QR',
+                subtitle: 'Validar entradas y salidas',
+                icon: Icons.qr_code_scanner,
+                color: Colors.purple,
+                isGuardOnly: true,
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (context) => const QRScannerScreen()),
+                  );
+                },
+              ),
+
+            if (authService.isGuard || authService.isAdmin)
+              const SizedBox(height: 16),
+            
+            // 4. Apertura Remota (Todos)
             _buildSecurityOption(
               context,
-              icon: Icons.door_sliding_rounded,
               title: 'Ábrete Sésamo',
-              subtitle: 'Abre la puerta principal remotamente',
-              color: AppTheme.successColor,
+              subtitle: 'Abrir portón principal',
+              icon: Icons.door_front_door,
+              color: Colors.teal,
+              onTap: () async {
+                  final securityService = Provider.of<SecurityService>(context, listen: false);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Enviando señal de apertura...')),
+                  );
+                  final success = await securityService.triggerGateOpen();
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                       SnackBar(
+                        content: Text(success ? 'Portón Abierto Correctamente' : 'Error al abrir portón'),
+                        backgroundColor: success ? Colors.green : Colors.red,
+                      ),
+                    );
+                  }
+              },
             ),
-            
-            _buildSecurityOption(
-              context,
-              icon: Icons.qr_code_scanner_rounded,
-              title: 'Escanear QR',
-              subtitle: 'Validar acceso de visitantes',
-              color: AppTheme.accentColor,
-              isGuardOnly: true,
-            ),
+
+            const SizedBox(height: 16),
             
             _buildSecurityOption(
               context,
@@ -60,14 +109,61 @@ class SecurityHubScreen extends StatelessWidget {
               title: 'Recorridos',
               subtitle: 'Ver ubicación del guardia en tiempo real',
               color: AppTheme.primaryLight,
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => const PatrolMapScreen()),
+                );
+              },
             ),
             
+            const SizedBox(height: 16),
+
+            // 6. Alerta de Servicios (Solo Guardia/Admin) - Camión de Basura
+             if (authService.isGuard || authService.isAdmin)
+              _buildSecurityOption(
+                context,
+                icon: Icons.delete_outline,
+                title: 'Alerta de Basura',
+                subtitle: 'Notificar llegada del camión',
+                color: Colors.brown,
+                isGuardOnly: true,
+                onTap: () async {
+                  final confirm = await showDialog<bool>(
+                    context: context,
+                    builder: (context) => AlertDialog(
+                      title: const Text('¿Confirmar Alerta?'),
+                      content: const Text('Esto notificará a TODOS los residentes que el camión de basura ha llegado.'),
+                      actions: [
+                        TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancelar')),
+                        ElevatedButton(onPressed: () => Navigator.pop(context, true), child: const Text('Enviar Notificación')),
+                      ],
+                    ),
+                  );
+
+                  if (confirm == true && context.mounted) {
+                     final commService = Provider.of<CommunicationService>(context, listen: false); // Requires Import if not present, but SecurityHub might not have CommService imported yet.
+                     // IMPORTANT: I need to check imports in SecurityHubScreen.
+                     // Assuming I will add it.
+                     await commService.triggerTrashAlert(authService.userId!);
+                     if (context.mounted) {
+                       ScaffoldMessenger.of(context).showSnackBar(
+                         const SnackBar(content: Text('Notificación enviada a los residentes'), backgroundColor: Colors.green),
+                       );
+                     }
+                  }
+                },
+              ),
+            
+            const SizedBox(height: 16),
+
             _buildSecurityOption(
               context,
               icon: Icons.history_rounded,
               title: 'Historial de Accesos',
               subtitle: 'Consulta quién ha ingresado',
               color: AppTheme.warningColor,
+              onTap: () => _navigateTo(context, 'Historial de Accesos'),
             ),
           ],
         ),
@@ -81,10 +177,11 @@ class SecurityHubScreen extends StatelessWidget {
     required String title,
     required String subtitle,
     required Color color,
+    VoidCallback? onTap,
     bool isGuardOnly = false,
   }) {
     return Container(
-      margin: const EdgeInsets.only(bottom: 12),
+      margin: const EdgeInsets.only(bottom: 0), // Margin handled by SizedBox in parent
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(AppTheme.radiusMedium),
@@ -135,7 +232,7 @@ class SecurityHubScreen extends StatelessWidget {
           size: 16,
           color: AppTheme.textLight,
         ),
-        onTap: () => _navigateTo(context, title),
+        onTap: onTap,
       ),
     );
   }
@@ -147,6 +244,47 @@ class SecurityHubScreen extends StatelessWidget {
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(10),
+        ),
+      ),
+    );
+  }
+
+  void _showPanicDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      barrierDismissible: true,
+      builder: (context) => Dialog(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+              PanicButtonWidget(size: 250),
+            const SizedBox(height: 24),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.9),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: const Text(
+                'Mantén presionado por 3 segundos\npara enviar alerta de emergencia',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: Colors.red,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+             const SizedBox(height: 16),
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text(
+                'Cancelar',
+                style: TextStyle(color: Colors.white, fontSize: 16),
+              ),
+            ),
+          ],
         ),
       ),
     );

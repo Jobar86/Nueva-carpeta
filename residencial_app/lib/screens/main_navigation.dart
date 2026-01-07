@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
-import '../../config/app_theme.dart';
-import '../home/dashboard_screen.dart';
-import '../security/security_hub_screen.dart';
-import '../communication/communication_hub_screen.dart';
-import '../profile/profile_screen.dart';
+import '../config/app_theme.dart';
+import 'home/dashboard_screen.dart';
+import 'security/security_hub_screen.dart';
+import 'communication/communication_hub_screen.dart';
+import 'profile/profile_screen.dart';
 
 /// Navegación principal con BottomNavigationBar
 class MainNavigation extends StatefulWidget {

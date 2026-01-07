@@ -1,20 +1,41 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import '../models/user_model.dart';
 
-/// Servicio de Autenticación (Placeholder)
-/// Conecta con Firebase Auth para gestionar usuarios
+/// Servicio de Autenticación con Firebase Auth
 class AuthService extends ChangeNotifier {
+  final FirebaseAuth _auth = FirebaseAuth.instance;
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  
   bool _isLoading = false;
-  String? _userId;
-  String? _userRole;
-  String? _userName;
-  String? _userEmail;
+  UserModel? _currentUserModel;
 
   bool get isLoading => _isLoading;
-  bool get isAuthenticated => _userId != null;
-  String? get userId => _userId;
-  String? get userRole => _userRole;
-  String? get userName => _userName;
-  String? get userEmail => _userEmail;
+  bool get isAuthenticated => _auth.currentUser != null;
+  String? get userId => _auth.currentUser?.uid;
+  String? get userEmail => _auth.currentUser?.email;
+  
+  // Obtener datos del usuario desde el modelo
+  String? get userRole => _currentUserModel?.role;
+  String? get userName => _currentUserModel?.fullName;
+  String? get propertyId => _currentUserModel?.propertyId;
+
+  bool get isAdmin => userRole == 'admin';
+  bool get isGuard => userRole == 'guard';
+  bool get isResident => userRole == 'resident';
+
+  AuthService() {
+    // Escuchar cambios en el estado de autenticación
+    _auth.authStateChanges().listen((User? user) {
+      if (user != null) {
+        _fetchUserData(user.uid);
+      } else {
+        _currentUserModel = null;
+        notifyListeners();
+      }
+    });
+  }
 
   /// Iniciar sesión con email y contraseña
   Future<bool> signIn({
@@ -25,23 +46,19 @@ class AuthService extends ChangeNotifier {
     notifyListeners();
 
     try {
-      // TODO: Implementar con Firebase Auth
-      // final credential = await FirebaseAuth.instance.signInWithEmailAndPassword(
-      //   email: email,
-      //   password: password,
-      // );
-      
-      // Simulación para desarrollo
-      await Future.delayed(const Duration(seconds: 1));
-      _userId = 'demo_user_123';
-      _userRole = 'resident';
-      _userName = 'Juan Pérez';
-      _userEmail = email;
-      
+      await _auth.signInWithEmailAndPassword(
+        email: email,
+        password: password,
+      );
+      // _fetchUserData se llamará automáticamente por el listener
+      return true;
+    } on FirebaseAuthException catch (e) {
+      print('Error en login: ${e.code}');
       _isLoading = false;
       notifyListeners();
-      return true;
+      return false;
     } catch (e) {
+      print('Error general: $e');
       _isLoading = false;
       notifyListeners();
       return false;
@@ -53,71 +70,73 @@ class AuthService extends ChangeNotifier {
     required String email,
     required String password,
     required String fullName,
-    required String role,
+    required String role, // 'resident', 'guard', 'admin'
+    String? propertyId,
   }) async {
     _isLoading = true;
     notifyListeners();
 
     try {
-      // TODO: Implementar con Firebase Auth
-      await Future.delayed(const Duration(seconds: 1));
+      // 1. Crear usuario en Auth
+      final credential = await _auth.createUserWithEmailAndPassword(
+        email: email,
+        password: password,
+      );
+
+      if (credential.user == null) throw Exception('No se pudo crear el usuario');
+
+      // 2. Crear documento en Firestore
+      final newUser = UserModel(
+        uid: credential.user!.uid,
+        fullName: fullName,
+        email: email,
+        role: role,
+        propertyId: propertyId,
+        isActive: true,
+        createdAt: DateTime.now(),
+      );
+
+      await _firestore.collection('users').doc(newUser.uid).set(newUser.toJson());
       
-      _userId = 'new_user_${DateTime.now().millisecondsSinceEpoch}';
-      _userRole = role;
-      _userName = fullName;
-      _userEmail = email;
+      // Actualizar estado local
+      _currentUserModel = newUser;
       
       _isLoading = false;
       notifyListeners();
       return true;
     } catch (e) {
+      print('Error en registro: $e');
       _isLoading = false;
       notifyListeners();
       return false;
     }
   }
 
-  /// Cerrar sesión
-  Future<void> signOut() async {
-    // TODO: Implementar con Firebase Auth
-    // await FirebaseAuth.instance.signOut();
-    
-    _userId = null;
-    _userRole = null;
-    _userName = null;
-    _userEmail = null;
-    notifyListeners();
+  /// Obtener datos adicionales del usuario desde Firestore
+  Future<void> _fetchUserData(String uid) async {
+    try {
+      final doc = await _firestore.collection('users').doc(uid).get();
+      if (doc.exists) {
+        _currentUserModel = UserModel.fromJson(doc.data()!);
+        // Si el usuario no tiene rol en Firestore, asignar 'resident' por defecto para evitar nulls
+        if (_currentUserModel?.role == null) {
+             print("Advertencia: Usuario sin rol definido en Firestore.");
+        }
+      } else {
+        print("Advertencia: Usuario autenticado pero sin documento en Firestore.");
+      }
+    } catch (e) {
+      print("Error obteniendo datos del usuario: $e");
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
   }
 
-  /// Verificar si es administrador
-  bool get isAdmin => _userRole == 'admin';
-
-  /// Verificar si es guardia
-  bool get isGuard => _userRole == 'guard';
-
-  /// Verificar si es residente
-  bool get isResident => _userRole == 'resident';
-
-  /// Establecer usuario de demostración por rol
-  void setDemoUser(String role) {
-    _userId = 'demo_${role}_123';
-    _userRole = role;
-    
-    switch (role) {
-      case 'resident':
-        _userName = 'Juan Pérez';
-        _userEmail = 'residente@demo.com';
-        break;
-      case 'guard':
-        _userName = 'Carlos García';
-        _userEmail = 'guardia@demo.com';
-        break;
-      case 'admin':
-        _userName = 'Ana López';
-        _userEmail = 'admin@demo.com';
-        break;
-    }
-    
+  /// Cerrar sesión
+  Future<void> signOut() async {
+    await _auth.signOut();
+    _currentUserModel = null;
     notifyListeners();
   }
 }

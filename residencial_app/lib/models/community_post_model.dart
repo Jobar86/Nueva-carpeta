@@ -8,6 +8,8 @@ class CommunityPostModel {
   final String content;
   final String authorId;
   final DateTime timestamp;
+  final String priority;
+
   final List<String>? surveyOptions;
   final Map<String, int>? votes; // user_id: option_index
 
@@ -18,6 +20,7 @@ class CommunityPostModel {
     required this.content,
     required this.authorId,
     required this.timestamp,
+    this.priority = 'normal', // 'normal', 'high'
     this.surveyOptions,
     this.votes,
   });
@@ -31,6 +34,7 @@ class CommunityPostModel {
       content: json['content'] as String,
       authorId: json['author_id'] as String,
       timestamp: (json['timestamp'] as Timestamp).toDate(),
+      priority: json['priority'] as String? ?? 'normal',
       surveyOptions: json['survey_options'] != null
           ? List<String>.from(json['survey_options'] as List)
           : null,
@@ -49,6 +53,7 @@ class CommunityPostModel {
       'content': content,
       'author_id': authorId,
       'timestamp': Timestamp.fromDate(timestamp),
+      'priority': priority,
       'survey_options': surveyOptions,
       'votes': votes,
     };
@@ -103,6 +108,7 @@ class CommunityPostModel {
     String? content,
     String? authorId,
     DateTime? timestamp,
+    String? priority,
     List<String>? surveyOptions,
     Map<String, int>? votes,
   }) {
@@ -113,6 +119,7 @@ class CommunityPostModel {
       content: content ?? this.content,
       authorId: authorId ?? this.authorId,
       timestamp: timestamp ?? this.timestamp,
+      priority: priority ?? this.priority,
       surveyOptions: surveyOptions ?? this.surveyOptions,
       votes: votes ?? this.votes,
     );

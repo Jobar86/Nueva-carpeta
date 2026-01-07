@@ -1,9 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'firebase_options.dart';
 
 import 'config/app_theme.dart';
 import 'services/auth_service.dart';
+import 'services/security_service.dart';
+import 'services/panic_service.dart';
+import 'services/communication_service.dart';
 import 'screens/auth/login_screen.dart';
 import 'screens/main_navigation.dart';
 
@@ -24,10 +29,10 @@ void main() async {
     ),
   );
   
-  // TODO: Inicializar Firebase
-  // await Firebase.initializeApp(
-  //   options: DefaultFirebaseOptions.currentPlatform,
-  // );
+  // Inicializar Firebase
+  await Firebase.initializeApp(
+    options: DefaultFirebaseOptions.currentPlatform,
+  );
   
   runApp(const ResidencialApp());
 }
@@ -41,6 +46,9 @@ class ResidencialApp extends StatelessWidget {
     return MultiProvider(
       providers: [
         ChangeNotifierProvider(create: (_) => AuthService()),
+        ChangeNotifierProvider(create: (_) => SecurityService()),
+        ChangeNotifierProvider(create: (_) => PanicService()),
+        ChangeNotifierProvider(create: (_) => CommunicationService()),
       ],
       child: MaterialApp(
         title: 'Mi Residencial',
